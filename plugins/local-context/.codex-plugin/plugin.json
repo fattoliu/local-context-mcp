@@ -1,6 +1,6 @@
 {
   "name": "local-context",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Read local files, directories, PDFs, and AI coding history through the local-context-mcp bridge.",
   "author": {
     "name": "fatto",
@@ -18,6 +18,7 @@
     "filesystem"
   ],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Local Context",
     "shortDescription": "Read files and folders from your Mac",
@@ -31,8 +32,7 @@
     "defaultPrompt": [
       "Read a local file and summarize it",
       "Inspect a local project directory",
-      "Search my local files for a keyword",
-      "Read my Claude Code conversation history"
+      "Search my local files for a keyword"
     ],
     "screenshots": []
   }
