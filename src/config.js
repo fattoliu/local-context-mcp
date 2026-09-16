@@ -13,6 +13,7 @@ export function loadConfig() {
   return {
     host: process.env.LOCAL_CONTEXT_HOST || '127.0.0.1',
     port: Number(process.env.LOCAL_CONTEXT_PORT || 7331),
+    publicBaseUrl: (process.env.LOCAL_CONTEXT_PUBLIC_URL || 'https://mcp.fatto.dpdns.org').replace(/\/$/, ''),
     maxReadBytes: Number(process.env.LOCAL_CONTEXT_MAX_READ_BYTES || 512 * 1024),
     maxSearchResults: Number(process.env.LOCAL_CONTEXT_MAX_SEARCH_RESULTS || 100),
   };
@@ -29,16 +30,11 @@ export function resolveRoot(root) {
 
 export function resolveWithinRoot(root, target = '.') {
   const realRoot = resolveRoot(root);
-  const candidate = path.isAbsolute(target)
-    ? expandPath(target)
-    : path.resolve(realRoot, target);
-
+  const candidate = path.isAbsolute(target) ? expandPath(target) : path.resolve(realRoot, target);
   if (!fs.existsSync(candidate)) throw new Error(`Path does not exist: ${target}`);
   const realCandidate = fs.realpathSync.native(candidate);
-
   if (realCandidate !== realRoot && !realCandidate.startsWith(`${realRoot}${path.sep}`)) {
     throw new Error(`Path escapes root: ${target}`);
   }
-
   return { root: realRoot, path: realCandidate };
 }
