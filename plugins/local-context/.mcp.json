@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "local-context-mcp": {
+      "type": "http",
+      "url": "https://mcp.fatto.dpdns.org/mcp"
+    }
+  }
+}
