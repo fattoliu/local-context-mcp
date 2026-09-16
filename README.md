@@ -2,6 +2,8 @@
 
 Expose local files, workspaces, and AI coding history to MCP clients through a **read-only** bridge.
 
+Access is request-scoped: the caller supplies a `root` path for generic file operations, and every resolved path must stay inside that root. No persistent path whitelist is required.
+
 The server never exposes write, shell, delete, commit, or process-execution tools.
 
 ## Authorization model
@@ -15,29 +17,10 @@ Each tool call explicitly supplies a `root` path. That root is the complete acce
 - symlink escapes are rejected;
 - another directory requires another explicit root in a later call.
 
-Example:
-
-```text
-root = /Users/fatto/Desktop/ui-to-code
-```
-
-That call may access:
-
-```text
-/Users/fatto/Desktop/ui-to-code/**
-```
-
-but not:
-
-```text
-/Users/fatto/Desktop/another-project
-```
-
-This keeps the interaction simple: give the MCP the path you want it to read, and that path defines the scope.
-
 ## Requirements
 
 - Node.js 20+
+- `cloudflared` for remote ChatGPT access
 
 ## Install
 
@@ -47,13 +30,13 @@ cd local-context-mcp
 npm install
 ```
 
-## Run
+## Local MCP
 
 ```bash
 npm start
 ```
 
-The MCP endpoint is:
+Endpoint:
 
 ```text
 http://127.0.0.1:7331/mcp
@@ -66,6 +49,75 @@ http://127.0.0.1:7331/health
 ```
 
 No local directory is permanently configured or exposed at startup.
+
+## Fixed Cloudflare hostname
+
+This repository defaults to the fixed hostname:
+
+```text
+mcp.fatto.dpdns.org
+```
+
+Install `cloudflared` if needed:
+
+```bash
+brew install cloudflared
+```
+
+Authorize this Mac with Cloudflare once:
+
+```bash
+cloudflared tunnel login
+```
+
+Then create/reuse the named tunnel and bind the DNS route:
+
+```bash
+npm run setup
+```
+
+The setup command uses tunnel name `local-context-mcp` and writes its local config to:
+
+```text
+~/.local-context-mcp/cloudflared.yml
+```
+
+Start the MCP server:
+
+```bash
+npm start
+```
+
+Start the Cloudflare Tunnel in another terminal:
+
+```bash
+npm run tunnel
+```
+
+The final public MCP URL is:
+
+```text
+https://mcp.fatto.dpdns.org/mcp
+```
+
+> Cloudflare Tunnel only provides secure transport to the Mac. Do not add this endpoint to ChatGPT until the OAuth layer is enabled. OAuth 2.1 / PKCE is the next implementation step.
+
+## CLI
+
+```bash
+npm run doctor
+npm run setup
+npm start
+npm run tunnel
+```
+
+Custom hostname/tunnel name is also supported:
+
+```bash
+node ./bin/local-context-mcp.js setup \
+  --hostname mcp.example.com \
+  --tunnel-name local-context-mcp
+```
 
 ## MCP tools
 
@@ -85,27 +137,20 @@ Every generic file tool is request-scoped to `root`.
 - `read_claude_session(projectsRoot?, projectId, sessionId)`
 - `search_claude_history(projectsRoot?, query, projectId?)`
 
-For convenience, `projectsRoot` defaults to `~/.claude/projects`, but this is only a tool-argument default, not a server-wide whitelist. You can point the Claude parser at another compatible history directory at any time.
-
-Claude Code session `.jsonl` files are normalized into role/text/timestamp records where possible.
+For convenience, `projectsRoot` defaults to `~/.claude/projects`, but this is only a tool-argument default, not a server-wide whitelist.
 
 ## Security model
-
-`local-context-mcp` is designed around a strict read-only boundary:
 
 1. The path supplied as `root` defines the access boundary for that tool call.
 2. Requested paths are resolved with `realpath`, so `..` traversal and symlink escapes are rejected.
 3. Directory recursion does not follow symbolic links.
 4. No file-write tool exists.
-5. No shell/process tool exists.
+5. No shell/process tool exists in the MCP surface.
 6. Large file reads and search result counts are capped.
 7. MCP instructions explicitly mark local content as untrusted data so file contents are not treated as instructions.
-
-The current server binds to `127.0.0.1` by default and is intended for local development/testing. **Do not expose `/mcp` directly to the public Internet yet.** Remote ChatGPT connectivity with OAuth + a secure tunnel is planned as the next layer.
+8. The public Cloudflare hostname must be protected by OAuth before ChatGPT is connected.
 
 ## Configuration
-
-See `.env.example` for supported environment variables.
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -118,21 +163,19 @@ There is intentionally no `LOCAL_CONTEXT_ROOTS` configuration.
 
 ## Example use cases
 
-Once connected to an MCP client, requests can look like:
-
 > Read everything relevant under `/Users/fatto/Desktop/ui-to-code` and explain the project.
 
-> Search `/Users/fatto/Desktop/my-project` for `target_xpath` and show me the relevant files.
+> Search `/Users/fatto/Desktop/my-project` for `target_xpath`.
 
-> Read my Claude Code history under `~/.claude/projects` and find the latest ui-to-code conversation.
+> Read my latest Claude Code conversation for the ui-to-code project.
 
 > Search my Claude Code history for discussions about MCP.
 
 ## Roadmap
 
 - OAuth 2.1 / PKCE for remote MCP clients.
-- Cloudflare Tunnel integration.
 - Guided ChatGPT connector setup.
+- Background launch/keep-alive on macOS.
 - Codex/Claude installer skill.
 - More AI coding history providers (Codex, Cursor, etc.).
 - Better text/binary detection and search indexing.
