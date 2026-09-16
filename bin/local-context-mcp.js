@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { startServer } from '../src/server.js';
+import { createPairingCode } from '../src/pairing.js';
 import {
   DEFAULT_HOSTNAME,
   DEFAULT_TUNNEL_NAME,
@@ -18,7 +19,7 @@ function readOption(name, fallback) {
 }
 
 function help() {
-  console.log(`local-context-mcp\n\nCommands:\n  start                 Start the local MCP server\n  setup                 Create/configure the named Cloudflare Tunnel\n  tunnel                Run the configured Cloudflare Tunnel\n  doctor                Check local prerequisites\n\nSetup options:\n  --hostname <host>     Public hostname (default: ${DEFAULT_HOSTNAME})\n  --tunnel-name <name>  Cloudflare Tunnel name (default: ${DEFAULT_TUNNEL_NAME})\n\nExamples:\n  local-context-mcp setup\n  local-context-mcp start\n  local-context-mcp tunnel\n`);
+  console.log(`local-context-mcp\n\nCommands:\n  start                 Start the local MCP server\n  pair                  Generate a one-time code for OAuth authorization\n  setup                 Configure a locally-managed Cloudflare Tunnel (legacy)\n  tunnel                Run the configured local tunnel\n  doctor                Check local prerequisites\n\nExamples:\n  local-context-mcp start\n  local-context-mcp pair\n`);
 }
 
 async function main() {
@@ -26,6 +27,14 @@ async function main() {
 
   if (command === 'start') {
     await startServer();
+    return;
+  }
+
+  if (command === 'pair') {
+    const result = createPairingCode();
+    console.log(`Pairing code: ${result.code}`);
+    console.log(`Expires at:   ${result.expiresAt}`);
+    console.log('Enter this code only on the local-context-mcp authorization page opened by ChatGPT.');
     return;
   }
 
@@ -46,19 +55,10 @@ async function main() {
       process.exitCode = 1;
       return;
     }
-
     const hostname = readOption('--hostname', DEFAULT_HOSTNAME);
     const name = readOption('--tunnel-name', DEFAULT_TUNNEL_NAME);
-    console.log(`Using Cloudflare hostname: ${hostname}`);
-    console.log('If this machine has not been authorized with Cloudflare yet, run:');
-    console.log('  cloudflared tunnel login');
-    console.log('Then run this setup command again.\n');
-
     const result = setupNamedTunnel({ name, hostname });
     console.log(JSON.stringify(result, null, 2));
-    console.log('\nTunnel configuration is ready.');
-    console.log('Start the MCP server in one terminal:  npm start');
-    console.log('Start the tunnel in another terminal: npm run tunnel');
     return;
   }
 
