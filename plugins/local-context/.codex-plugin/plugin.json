@@ -1,22 +1,12 @@
 {
   "name": "local-context",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Read local files, directories, PDFs, and AI coding history through the local-context-mcp bridge.",
   "author": {
-    "name": "fatto",
-    "url": "https://github.com/fattoliu"
+    "name": "fatto"
   },
-  "homepage": "https://github.com/fattoliu/local-context-mcp",
-  "repository": "https://github.com/fattoliu/local-context-mcp",
   "license": "MIT",
-  "keywords": [
-    "local-files",
-    "local-context",
-    "mcp",
-    "pdf",
-    "claude-code",
-    "filesystem"
-  ],
+  "keywords": ["local-files", "local-context", "mcp", "pdf", "claude-code", "filesystem"],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
@@ -25,10 +15,7 @@
     "longDescription": "Use the Local Context MCP bridge to read user-specified local files and directories, extract PDF text, search local content, and inspect Claude Code history. Read-only by design.",
     "developerName": "fatto",
     "category": "Developer Tools",
-    "capabilities": [
-      "Read"
-    ],
-    "websiteURL": "https://github.com/fattoliu/local-context-mcp",
+    "capabilities": ["Read"],
     "defaultPrompt": [
       "Read a local file and summarize it",
       "Inspect a local project directory",
