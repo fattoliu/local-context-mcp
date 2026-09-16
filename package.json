@@ -1,6 +1,6 @@
 {
   "name": "local-context-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Secure read-only MCP bridge for local files, workspaces, and AI coding history.",
   "type": "module",
   "license": "MIT",
@@ -12,10 +12,11 @@
   },
   "scripts": {
     "start": "node ./bin/local-context-mcp.js start",
+    "pair": "node ./bin/local-context-mcp.js pair",
     "setup": "node ./bin/local-context-mcp.js setup",
     "tunnel": "node ./bin/local-context-mcp.js tunnel",
     "doctor": "node ./bin/local-context-mcp.js doctor",
-    "check": "node --check ./bin/local-context-mcp.js && node --check ./src/server.js && node --check ./src/config.js && node --check ./src/fs-context.js && node --check ./src/claude-history.js && node --check ./src/tunnel.js"
+    "check": "node --check ./bin/local-context-mcp.js && node --check ./src/server.js && node --check ./src/config.js && node --check ./src/fs-context.js && node --check ./src/claude-history.js && node --check ./src/tunnel.js && node --check ./src/oauth.js && node --check ./src/auth-store.js && node --check ./src/pairing.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.2",
