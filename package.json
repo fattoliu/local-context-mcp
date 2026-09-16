@@ -1,0 +1,22 @@
+{
+  "name": "local-context-mcp",
+  "version": "0.1.0",
+  "description": "Secure read-only MCP bridge for local files, workspaces, and AI coding history.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "local-context-mcp": "./bin/local-context-mcp.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node ./bin/local-context-mcp.js",
+    "check": "node --check ./bin/local-context-mcp.js && node --check ./src/server.js && node --check ./src/config.js && node --check ./src/fs-context.js && node --check ./src/claude-history.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.2",
+    "express": "^5.1.0",
+    "zod": "^3.25.0"
+  }
+}
