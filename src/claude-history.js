@@ -1,14 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveRoot, resolveWithinRoot } from './config.js';
 
 function projectNameFromDir(dirName) {
   return dirName.replace(/^-/, '/').replaceAll('-', '/');
-}
-
-function assertSimpleId(value, label) {
-  if (!value || value.includes('/') || value.includes('\\') || value === '.' || value === '..') {
-    throw new Error(`Invalid ${label}`);
-  }
 }
 
 function safeJson(line) {
@@ -42,11 +37,18 @@ function normalizeRecord(record) {
   };
 }
 
-export function listClaudeProjects(config) {
-  return fs.readdirSync(config.claudeProjectsRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+function assertSimpleId(value, label) {
+  if (!value || value.includes('/') || value.includes('\\') || value === '.' || value === '..') {
+    throw new Error(`Invalid ${label}`);
+  }
+}
+
+export function listClaudeProjects(projectsRoot) {
+  const root = resolveRoot(projectsRoot);
+  return fs.readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.isSymbolicLink())
     .map((entry) => {
-      const fullPath = path.join(config.claudeProjectsRoot, entry.name);
+      const fullPath = path.join(root, entry.name);
       const stat = fs.statSync(fullPath);
       return {
         id: entry.name,
@@ -58,16 +60,15 @@ export function listClaudeProjects(config) {
     .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
 }
 
-export function listClaudeSessions(config, projectId) {
+export function listClaudeSessions(projectsRoot, projectId) {
   assertSimpleId(projectId, 'projectId');
-  const projectDir = path.join(config.claudeProjectsRoot, projectId);
-  const realProjectDir = fs.realpathSync.native(projectDir);
-  if (!realProjectDir.startsWith(`${config.claudeProjectsRoot}${path.sep}`)) throw new Error('Invalid project');
+  const resolved = resolveWithinRoot(projectsRoot, projectId);
+  if (!fs.statSync(resolved.path).isDirectory()) throw new Error('Invalid project');
 
-  return fs.readdirSync(realProjectDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.jsonl'))
+  return fs.readdirSync(resolved.path, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && !entry.isSymbolicLink() && entry.name.endsWith('.jsonl'))
     .map((entry) => {
-      const fullPath = path.join(realProjectDir, entry.name);
+      const fullPath = path.join(resolved.path, entry.name);
       const stat = fs.statSync(fullPath);
       return {
         sessionId: entry.name.slice(0, -'.jsonl'.length),
@@ -79,38 +80,38 @@ export function listClaudeSessions(config, projectId) {
     .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
 }
 
-export function readClaudeSession(config, projectId, sessionId, limit = 500) {
+export function readClaudeSession(projectsRoot, projectId, sessionId, limit = 500) {
   assertSimpleId(projectId, 'projectId');
   assertSimpleId(sessionId, 'sessionId');
-  const file = path.join(config.claudeProjectsRoot, projectId, `${sessionId}.jsonl`);
-  const realFile = fs.realpathSync.native(file);
-  const expectedProjectDir = fs.realpathSync.native(path.join(config.claudeProjectsRoot, projectId));
-  if (!realFile.startsWith(`${expectedProjectDir}${path.sep}`)) throw new Error('Invalid session');
+  const relative = path.join(projectId, `${sessionId}.jsonl`);
+  const resolved = resolveWithinRoot(projectsRoot, relative);
+  if (!fs.statSync(resolved.path).isFile()) throw new Error('Invalid session');
 
-  const records = fs.readFileSync(realFile, 'utf8').split(/\r?\n/).filter(Boolean).map(safeJson).filter(Boolean);
+  const records = fs.readFileSync(resolved.path, 'utf8').split(/\r?\n/).filter(Boolean).map(safeJson).filter(Boolean);
   const messages = records.map(normalizeRecord).filter(Boolean);
   const capped = messages.slice(-Math.max(1, Math.min(Number(limit) || 500, 2000)));
   return {
+    root: resolved.root,
     projectId,
     sessionId,
-    file: realFile,
+    file: resolved.path,
     totalMessages: messages.length,
     returnedMessages: capped.length,
     messages: capped,
   };
 }
 
-export function searchClaudeHistory(config, query, projectId, maxResults = 100) {
+export function searchClaudeHistory(projectsRoot, query, projectId, maxResults = 100) {
   if (!query) throw new Error('query is required');
-  if (projectId) assertSimpleId(projectId, 'projectId');
-  const projects = projectId ? [{ id: projectId }] : listClaudeProjects(config);
+  const root = resolveRoot(projectsRoot);
+  const projects = projectId ? [{ id: projectId }] : listClaudeProjects(root);
   const needle = query.toLowerCase();
   const results = [];
   const cap = Math.max(1, Math.min(Number(maxResults) || 100, 500));
 
   for (const project of projects) {
     let sessions;
-    try { sessions = listClaudeSessions(config, project.id); } catch { continue; }
+    try { sessions = listClaudeSessions(root, project.id); } catch { continue; }
     for (const session of sessions) {
       if (results.length >= cap) break;
       const lines = fs.readFileSync(session.file, 'utf8').split(/\r?\n/);
@@ -130,5 +131,5 @@ export function searchClaudeHistory(config, query, projectId, maxResults = 100) 
     }
   }
 
-  return { query, count: results.length, results };
+  return { root, query, count: results.length, results };
 }
