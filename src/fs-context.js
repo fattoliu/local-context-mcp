@@ -1,18 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveAllowedPath } from './config.js';
+import { resolveRoot, resolveWithinRoot } from './config.js';
 
 function statEntry(fullPath, name) {
-  const lstat = fs.lstatSync(fullPath);
-  if (lstat.isSymbolicLink()) {
-    return {
-      name,
-      path: fullPath,
-      type: 'symlink',
-      size: lstat.size,
-      modifiedAt: lstat.mtime.toISOString(),
-    };
-  }
   const stat = fs.statSync(fullPath);
   return {
     name,
@@ -23,17 +13,19 @@ function statEntry(fullPath, name) {
   };
 }
 
-export function listRoots(config) {
-  return config.roots.map((root) => statEntry(root, path.basename(root) || root));
+export function describeRoot(root) {
+  const realRoot = resolveRoot(root);
+  return statEntry(realRoot, path.basename(realRoot) || realRoot);
 }
 
-export function listDirectory(config, inputPath, depth = 1) {
-  const rootPath = resolveAllowedPath(inputPath, config.roots);
+export function listDirectory(config, root, inputPath = '.', depth = 1) {
+  const resolved = resolveWithinRoot(root, inputPath);
   const maxDepth = Math.max(0, Math.min(Number(depth) || 1, 4));
 
   function walk(dir, currentDepth) {
     return fs.readdirSync(dir, { withFileTypes: true })
       .filter((entry) => entry.name !== '.DS_Store')
+      .filter((entry) => !entry.isSymbolicLink())
       .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name))
       .map((entry) => {
         const fullPath = path.join(dir, entry.name);
@@ -45,24 +37,25 @@ export function listDirectory(config, inputPath, depth = 1) {
       });
   }
 
-  return { path: rootPath, entries: walk(rootPath, 1) };
+  return { root: resolved.root, path: resolved.path, entries: walk(resolved.path, 1) };
 }
 
-export function readFile(config, inputPath, start = 0, length) {
-  const filePath = resolveAllowedPath(inputPath, config.roots);
-  const stat = fs.statSync(filePath);
+export function readFile(config, root, inputPath, start = 0, length) {
+  const resolved = resolveWithinRoot(root, inputPath);
+  const stat = fs.statSync(resolved.path);
   if (!stat.isFile()) throw new Error('Path is not a file');
 
   const maxBytes = config.maxReadBytes;
   const offset = Math.max(0, Number(start) || 0);
   const requested = length == null ? Math.min(stat.size - offset, maxBytes) : Number(length);
   const bytesToRead = Math.max(0, Math.min(requested, maxBytes, stat.size - offset));
-  const fd = fs.openSync(filePath, 'r');
+  const fd = fs.openSync(resolved.path, 'r');
   try {
     const buffer = Buffer.alloc(bytesToRead);
     const bytesRead = fs.readSync(fd, buffer, 0, bytesToRead, offset);
     return {
-      path: filePath,
+      root: resolved.root,
+      path: resolved.path,
       size: stat.size,
       offset,
       bytesRead,
@@ -74,9 +67,9 @@ export function readFile(config, inputPath, start = 0, length) {
   }
 }
 
-export function searchFiles(config, query, root, options = {}) {
+export function searchFiles(config, root, query, options = {}) {
   if (!query) throw new Error('query is required');
-  const searchRoot = resolveAllowedPath(root || config.roots[0], config.roots);
+  const searchRoot = resolveRoot(root);
   const needle = options.caseSensitive ? query : query.toLowerCase();
   const results = [];
   const maxResults = Math.min(Number(options.maxResults) || 50, config.maxSearchResults);
@@ -84,23 +77,14 @@ export function searchFiles(config, query, root, options = {}) {
 
   function visit(currentPath) {
     if (results.length >= maxResults) return;
-
-    let lstat;
-    try {
-      lstat = fs.lstatSync(currentPath);
-    } catch {
-      return;
-    }
-
-    // Never follow symlinks during recursive search. This prevents a symlink
-    // inside an allowed root from escaping into an unapproved directory.
-    if (lstat.isSymbolicLink()) return;
-
+    const lst = fs.lstatSync(currentPath);
+    if (lst.isSymbolicLink()) return;
     const stat = fs.statSync(currentPath);
+
     if (stat.isDirectory()) {
       for (const entry of fs.readdirSync(currentPath, { withFileTypes: true })) {
         if (results.length >= maxResults) break;
-        if (entry.name === '.git' || entry.name === 'node_modules') continue;
+        if (entry.name === '.git' || entry.name === 'node_modules' || entry.isSymbolicLink()) continue;
         visit(path.join(currentPath, entry.name));
       }
       return;
