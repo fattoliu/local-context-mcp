@@ -5,6 +5,12 @@ function projectNameFromDir(dirName) {
   return dirName.replace(/^-/, '/').replaceAll('-', '/');
 }
 
+function assertSimpleId(value, label) {
+  if (!value || value.includes('/') || value.includes('\\') || value === '.' || value === '..') {
+    throw new Error(`Invalid ${label}`);
+  }
+}
+
 function safeJson(line) {
   try { return JSON.parse(line); } catch { return null; }
 }
@@ -53,6 +59,7 @@ export function listClaudeProjects(config) {
 }
 
 export function listClaudeSessions(config, projectId) {
+  assertSimpleId(projectId, 'projectId');
   const projectDir = path.join(config.claudeProjectsRoot, projectId);
   const realProjectDir = fs.realpathSync.native(projectDir);
   if (!realProjectDir.startsWith(`${config.claudeProjectsRoot}${path.sep}`)) throw new Error('Invalid project');
@@ -73,9 +80,12 @@ export function listClaudeSessions(config, projectId) {
 }
 
 export function readClaudeSession(config, projectId, sessionId, limit = 500) {
+  assertSimpleId(projectId, 'projectId');
+  assertSimpleId(sessionId, 'sessionId');
   const file = path.join(config.claudeProjectsRoot, projectId, `${sessionId}.jsonl`);
   const realFile = fs.realpathSync.native(file);
-  if (!realFile.startsWith(`${config.claudeProjectsRoot}${path.sep}`)) throw new Error('Invalid session');
+  const expectedProjectDir = fs.realpathSync.native(path.join(config.claudeProjectsRoot, projectId));
+  if (!realFile.startsWith(`${expectedProjectDir}${path.sep}`)) throw new Error('Invalid session');
 
   const records = fs.readFileSync(realFile, 'utf8').split(/\r?\n/).filter(Boolean).map(safeJson).filter(Boolean);
   const messages = records.map(normalizeRecord).filter(Boolean);
@@ -92,6 +102,7 @@ export function readClaudeSession(config, projectId, sessionId, limit = 500) {
 
 export function searchClaudeHistory(config, query, projectId, maxResults = 100) {
   if (!query) throw new Error('query is required');
+  if (projectId) assertSimpleId(projectId, 'projectId');
   const projects = projectId ? [{ id: projectId }] : listClaudeProjects(config);
   const needle = query.toLowerCase();
   const results = [];
