@@ -3,6 +3,16 @@ import path from 'node:path';
 import { resolveAllowedPath } from './config.js';
 
 function statEntry(fullPath, name) {
+  const lstat = fs.lstatSync(fullPath);
+  if (lstat.isSymbolicLink()) {
+    return {
+      name,
+      path: fullPath,
+      type: 'symlink',
+      size: lstat.size,
+      modifiedAt: lstat.mtime.toISOString(),
+    };
+  }
   const stat = fs.statSync(fullPath);
   return {
     name,
@@ -74,6 +84,18 @@ export function searchFiles(config, query, root, options = {}) {
 
   function visit(currentPath) {
     if (results.length >= maxResults) return;
+
+    let lstat;
+    try {
+      lstat = fs.lstatSync(currentPath);
+    } catch {
+      return;
+    }
+
+    // Never follow symlinks during recursive search. This prevents a symlink
+    // inside an allowed root from escaping into an unapproved directory.
+    if (lstat.isSymbolicLink()) return;
+
     const stat = fs.statSync(currentPath);
     if (stat.isDirectory()) {
       for (const entry of fs.readdirSync(currentPath, { withFileTypes: true })) {
